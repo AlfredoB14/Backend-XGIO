@@ -19,6 +19,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "fallback-secret-key-for-development")
 
 # Inicializar Firebase - con manejo para diferentes entornos
+firebase_initialized = False  # Flag to track initialization status
 try:
     # Primero intentar con archivo JSON de credenciales para desarrollo local o si existe en Vercel
     if os.path.exists('XGIO_Credentials.json'):
@@ -42,8 +43,23 @@ try:
 
     if not firebase_admin._apps:  # Evitar inicialización múltiple
         firebase_admin.initialize_app(cred)
+        firebase_initialized = True
+        print("Firebase initialized successfully")
 except Exception as e:
     print(f"Error initializing Firebase: {str(e)}")
+    # Si hay error, intentar inicializar con un método alternativo o con configuración mínima
+    try:
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+            firebase_initialized = True
+            print("Firebase initialized with default configuration")
+    except Exception as e2:
+        print(f"Failed second attempt to initialize Firebase: {str(e2)}")
+    
+# Helper function to check Firebase initialization before accessing services
+def ensure_firebase_initialized():
+    if not firebase_initialized and not firebase_admin._apps:
+        raise Exception("The default Firebase app does not exist. Firebase initialization failed.")
 
 
 #---------------------------- FIREBASE AUTHENTICATION -------------------------------
