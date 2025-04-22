@@ -20,6 +20,11 @@ app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "fallback-secret-key-for
 
 # Inicializar Firebase - con manejo para diferentes entornos
 firebase_initialized = False  # Flag to track initialization status
+
+# Add this line to prevent metadata server timeouts
+# This tells the Google Auth library not to use the metadata server
+os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get("FIREBASE_PROJECT_ID", "")
+
 try:
     # Primero intentar con archivo JSON de credenciales para desarrollo local o si existe en Vercel
     if os.path.exists('XGIO_Credentials.json'):
