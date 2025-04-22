@@ -90,6 +90,7 @@ def register():
             "uid": user.uid,
             "email": email,
             "display_name": display_name,
+            "cane_id": None,  # Inicialmente vacío,
             "created_at": datetime.datetime.utcnow().isoformat()
         }
         db.collection("users").document(user.uid).set(user_data)
@@ -303,38 +304,37 @@ def get_routes():
 #Send Current Location
 @app.route("/send-current-location", methods=["POST"])
 def send_current_location():
-    token = request.headers.get('Authorization')
-
-    if not token:
-        return jsonify({"error": "Token missing"}), 400
-
+    # Ya no requerimos el token de autenticación
+    
     try:
-        # Extraer el token del encabezado "Authorization"
-        token = token.split()[1]
-
-        # Decodificar el token JWT
-        decoded_token = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-        user_uid = decoded_token["uid"]
-
         # Obtener los datos de la ubicación del cuerpo de la solicitud
         data = request.json
         latitude = data.get("latitude")
         longitude = data.get("longitude")
+        cane_id = data.get("cane_id")
         timestamp = datetime.datetime.now(datetime.timezone.utc)
 
-        if latitude is None or longitude is None:
-            return jsonify({"error": "Latitude and longitude are required"}), 400
+        if latitude is None or longitude is None or cane_id is None:
+            return jsonify({"error": "Latitude, longitude, and cane_id are required"}), 400
 
         # Conectar a Firestore
         db = firestore.client()
 
-        # Verificar que el usuario existe
-        user_ref = db.collection("users").document(user_uid)
-        user_doc = user_ref.get()
-
-        if not user_doc.exists:
-            return jsonify({"error": f"User with UID {user_uid} not found"}), 404
-
+        # Buscar el usuario que tiene el cane_id proporcionado
+        users_ref = db.collection("users")
+        query = users_ref.where("cane_id", "==", cane_id)
+        user_docs = query.stream()
+        
+        # Lista para almacenar los usuarios encontrados
+        matching_users = list(user_docs)
+        
+        if not matching_users:
+            return jsonify({"error": f"No user found with cane_id: {cane_id}"}), 404
+            
+        # Tomar el primer usuario que coincida (debería ser único)
+        user_doc = matching_users[0]
+        user_uid = user_doc.id
+        
         # Crear o agregar a la subcolección "CurrentLocation" del usuario
         current_date = timestamp.date().isoformat()  # Obtener la fecha actual en formato ISO
         location_data = {
@@ -344,6 +344,7 @@ def send_current_location():
         }
 
         # Referencia al documento del día actual en la subcolección "CurrentLocation"
+        user_ref = db.collection("users").document(user_uid)
         current_location_ref = user_ref.collection("CurrentLocation").document(current_date)
 
         # Verificar si ya existe un documento para el día actual
@@ -359,12 +360,8 @@ def send_current_location():
             # Si no existe, crear un nuevo documento con la ubicación
             current_location_ref.set({"locations": [location_data]})
 
-        return jsonify({"message": "Current location added successfully"}), 200
+        return jsonify({"message": "Current location added successfully", "user_uid": user_uid}), 200
 
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token has expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
     except Exception as e:
         print(f"Error adding current location: {str(e)}")
         return jsonify({"error": str(e)}), 500
