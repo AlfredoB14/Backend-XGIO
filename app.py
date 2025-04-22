@@ -6,65 +6,34 @@ import os
 import datetime
 import jwt
 from firebase_admin import firestore
-from flask_cors import CORS
+from flask_cors import CORS  # Import Flask-CORS
 from dotenv import load_dotenv
-import json
 
-# Intentar cargar variables de entorno desde .env para desarrollo local
+# Cargar variables de entorno
 load_dotenv()
 
 app = Flask(__name__)
 # Configure CORS to allow requests from any origin
 CORS(app, resources={r"/*": {"origins": "*"}})
-app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY", "fallback-secret-key-for-development")
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 
-# Inicializar Firebase - con manejo para diferentes entornos
-firebase_initialized = False  # Flag to track initialization status
+# Cargar credenciales de Firebase desde variables de entorno
+cred_dict = {
+    "type": os.getenv("FIREBASE_TYPE"),
+    "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+    "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n") if os.getenv("FIREBASE_PRIVATE_KEY") else "",
+    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+    "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+    "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+    "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
+    "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
+    "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")
+}
 
-# Explicitly disable Google Auth metadata server usage to prevent timeouts on Vercel
-os.environ['NO_GCE_CHECK'] = 'true'
-os.environ['GOOGLE_CLOUD_PROJECT'] = os.environ.get("FIREBASE_PROJECT_ID", "")
-
-try:
-    # Primero intentar con archivo JSON de credenciales para desarrollo local o si existe en Vercel
-    if os.path.exists('XGIO_Credentials.json'):
-        cred = credentials.Certificate('XGIO_Credentials.json')
-    # Si no hay archivo, intentar con variables de entorno
-    else:
-        cred_dict = {
-            "type": os.environ.get("FIREBASE_TYPE"),
-            "project_id": os.environ.get("FIREBASE_PROJECT_ID"),
-            "private_key_id": os.environ.get("FIREBASE_PRIVATE_KEY_ID"),
-            "private_key": os.environ.get("FIREBASE_PRIVATE_KEY", "").replace("\\n", "\n"),
-            "client_email": os.environ.get("FIREBASE_CLIENT_EMAIL"),
-            "client_id": os.environ.get("FIREBASE_CLIENT_ID"),
-            "auth_uri": os.environ.get("FIREBASE_AUTH_URI"),
-            "token_uri": os.environ.get("FIREBASE_TOKEN_URI"),
-            "auth_provider_x509_cert_url": os.environ.get("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
-            "client_x509_cert_url": os.environ.get("FIREBASE_CLIENT_X509_CERT_URL"),
-            "universe_domain": os.environ.get("FIREBASE_UNIVERSE_DOMAIN")
-        }
-        cred = credentials.Certificate(cred_dict)
-
-    if not firebase_admin._apps:  # Evitar inicialización múltiple
-        firebase_admin.initialize_app(cred)
-        firebase_initialized = True
-        print("Firebase initialized successfully")
-except Exception as e:
-    print(f"Error initializing Firebase: {str(e)}")
-    # Si hay error, intentar inicializar con un método alternativo o con configuración mínima
-    try:
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app()
-            firebase_initialized = True
-            print("Firebase initialized with default configuration")
-    except Exception as e2:
-        print(f"Failed second attempt to initialize Firebase: {str(e2)}")
-    
-# Helper function to check Firebase initialization before accessing services
-def ensure_firebase_initialized():
-    if not firebase_initialized and not firebase_admin._apps:
-        raise Exception("The default Firebase app does not exist. Firebase initialization failed.")
+cred = credentials.Certificate(cred_dict)
+firebase_admin.initialize_app(cred)
 
 
 #---------------------------- FIREBASE AUTHENTICATION -------------------------------
