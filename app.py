@@ -66,6 +66,10 @@ def ensure_firebase_initialized():
 # ENDPOINTS DE AUTENTICACIÓN
 #------------------------------------------------------------------------------------
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Welcome to the XGIO API"}), 200
+
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
